@@ -174,7 +174,6 @@ if __name__ == "__main__":
     model = QuadCopter(m=m, arm_length=arm_length, Ixx=Ixx, Iyy=Iyy, Izz=Izz, g=g, c_yaw=c_yaw)
     controller = Controller(m=m, g=g)
     visualizer = Visualizer(arm_length=arm_length, r_rotor=r_rotor)
-    visualizer.live(model, controller, target_pos, dt)
 
     start_logging(model, controller, target_pos, dt)
     visualizer.live(model, controller, target_pos, dt)
