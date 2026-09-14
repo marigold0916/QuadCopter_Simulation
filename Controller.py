@@ -2,8 +2,8 @@ import numpy as np
 
 class Controller:
     def __init__(self, m=1.5, g=9.81,
-        Kp_pos = (2.0, 4.0,4.0), Ki_pos = (0,0,0), Kd_pos = (2.0,2.0,3.0),
-        Kp_att = (6.0, 6.0,3.0), Ki_att = (0,0,0), Kd_att = (2.0,2.0,1.0)):
+        Kp_pos = (0.15, 1.4,1.5), Ki_pos = (0,0,0), Kd_pos = (0.5,1.5,1.75),
+        Kp_att = (1.5, 1.5,0.75), Ki_att = (0,0,0), Kd_att = (0.25,0.25,0.25)):
 
         self.m = m; self.g=g
         self.Kp_pos = np.array(Kp_pos); self.Ki_pos = np.array(Ki_pos); self.Kd_pos = np.array(Kd_pos)
@@ -35,6 +35,7 @@ class Controller:
     def compute_kinetic_mapping(self, acc_des, target_yaw):
         acc_des_g = acc_des.copy()
         acc_des_g[2] += self.g
+        acc_des_g[2] = max(acc_des_g[2], 0.1)
 
         zb_des = acc_des_g / np.linalg.norm(acc_des_g)
         xc_des = np.array([np.cos(target_yaw), np.sin(target_yaw) , 0.0])
@@ -48,7 +49,7 @@ class Controller:
         psi_des = np.arctan2(R_des[1,0], R_des[0,0])
         target_att = np.array([phi_des, theta_des, psi_des])
 
-        F_total = self.m * np.linalg.norm(acc_des_g)
+        F_total = self.m * np.dot(acc_des_g, zb_des)
         return F_total, target_att
 
 
