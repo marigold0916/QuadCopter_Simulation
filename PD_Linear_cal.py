@@ -3,89 +3,135 @@ import math as m
 from Controller import Controller
 from QuadCopter import QuadCopter
 
-# Kp_pos = list(map(float, input("Kp_pos 입력: ").split()))
-# Kd_pos = list(map(float, input("Kd_pos 입력: ").split()))
-# Kp_att = list(map(float, input("Kp_att 입력: ").split()))
-# Kd_att = list(map(float, input("Kd_att 입력: ").split()))
-Quad_I = QuadCopter()
-Kpos = Controller()
-Katt = Controller()
+Quad_I =   QuadCopter()
+Kpos   =   Controller()
+Katt   =   Controller()
 
-Inn = Quad_I.I
+Inn    = Quad_I.I
 Kp_pos = Kpos.Kp_pos
 Kd_pos = Kpos.Kd_pos
+Ki_pos = Kpos.Ki_pos
+Ki_att = Kpos.Ki_att
 Kp_att = Katt.Kp_att
 Kd_att = Katt.Kd_att
 
-Wn_pos = np.sqrt(Kp_pos)
-ksi_pos = Kd_pos * (1 / (2 * np.sqrt(Kp_pos)))
+s3_acc = np.ones_like(Inn) 
 
-Wn_att = np.sqrt(Kp_att/Inn)
-ksi_att =  Kd_att * (1/(2*np.sqrt(Kp_att*Inn)))
 
-#Linear Stability
-def Laplace_transform_att(Wn_att, ksi_att):
-    #s**2 +2*ksi_att*Wn_att*s + Wn_att**2 = 0
-    a = 1.0
-    b = 2*ksi_att*Wn_att
-    c = Wn_att**2
 
-    s1 = (-b + np.sqrt((b**2) - 4 * a * c +0j))
-    s1 = s1/(2*a)
+#stable?
+def att_stability():
+    att3 = Inn
+    att2 = Kd_att
+    att1 = Kp_att
+    att0 = Ki_att
+    btt1 = ((att2*att1) - (att3*att0))/att2
 
-    s2 = (-b - np.sqrt((b**2) - 4 * a * c +0j))
-    s2 = s2/(2*a)
-    print(f"att s1: {s1}")
-    print(f"att s2: {s2}")
-    return s1, s2
+    att_stable = np.min([att3,att2,att1,att0,btt1])
 
-def Laplace_transform_pos():
-        #s^2 + Kd*s +Kp = 0
-    a_p = 1
-    b_p = Kd_pos
-    c_p = Kp_pos
-    s1_pos = (-b_p + np.sqrt((b_p**2) - 4 * a_p * c_p +0j))
-    s1_pos = s1_pos/(2*a_p)
+    if (att_stable > 0).all():
+        print("Att Linear Stable")
+        return True
+    else:
+        print("Att Linear Unstable")
+        print(f"att3:{att3},att2:{att2},att1:{att1},att0:{att0},btt1:{btt1}")
+        return False
 
-    s2_pos = (-b_p - np.sqrt((b_p**2) - 4 * a_p * c_p +0j))
-    s2_pos = s2_pos/(2*a_p)
+def acc_stability():
+    acc3 = s3_acc
+    acc2 = Kd_pos
+    acc1 = Kp_pos
+    acc0 = Ki_pos
+    bcc1 = ((acc2*acc1) - (acc3*acc0))/acc2
 
-    print(f"pos s1: {s1_pos}")
-    print(f"pos s2: {s2_pos}")
-    return s1_pos, s2_pos
+    acc_stable = (
+        (acc3 > 0) &
+        (acc2 > 0) &
+        (acc1 > 0) &
+        (acc0 > 0) &
+        (bcc1 > 0)
+    )
+    if np.all(acc_stable):
+        print("Acc Linear Stable")
+        return True
+    else:
+        print("Acc Linear Unstable")
+        print(f"acc3:{acc3},acc2:{acc2},acc1:{acc1},acc0:{acc0},bcc1:{bcc1}")
+        return False
 
-def overshoot(ksi_pos, ksi_att):
-    M_pos = np.zeros(len(ksi_pos))
-    M_att = np.zeros(len(ksi_att))
+def overshoot():
+    sigma_att_list, wd_att_list = [], []
+    sigma_acc_list, wd_acc_list = [], []
+    for i in range(len(Inn)):
+        co_att = [Inn[i],    Kd_att[i], Kp_att[i], Ki_att[i]]
+        co_acc = [s3_acc[i], Kd_pos[i], Kp_pos[i], Ki_pos[i]]
 
-    for i in range(len(ksi_pos)):
-        if ksi_pos[i] < 1:
-            M_pos[i] = np.exp(-((np.pi*ksi_pos[i]) / (np.sqrt(1-ksi_pos[i]**2))))
-            M_pos[i] = M_pos[i] * 100
-            print(f"pos overshoot: {M_pos[i]:.2f}%")
-                
-        elif ksi_pos[i] == 1:
-            print(f"{ksi_pos[i]:.2f}, pos{[i+1]}임계감쇠")
+        root_att = np.roots(co_att)
+        root_acc = np.roots(co_acc)
 
-        else:
-            print(f"{ksi_pos[i]:.2f},  pos{[i+1]}과감쇠")
+        
 
-    for j in range(len(ksi_att)):        
-        if ksi_att[j] < 1:
-            M_att[j] = np.exp(-((np.pi*ksi_att[j]) / (np.sqrt(1-ksi_att[j]**2))))
-            M_att[j] = M_att[j] * 100
-            print(f"att overshoot: {M_att[j]:.2f}%")
-                
-        elif ksi_att[j] == 1:
-            print(f"{ksi_att[j]:.2f}, att{[j+1]} 임계감쇠")
-            
-        else:
-            print(f"{ksi_att[j]:.2f}, att{[j+1]}과감쇠")
-            
-    return M_pos,M_att
-# def Laplace_transform_rev_att(s1,s2,e0, edot0):
-#     C1 = 
+        sigma_att_list.append(root_att.real)
+        sigma_acc_list.append(root_acc.real)
 
-att_s1, att_s2 = Laplace_transform_att(Wn_att, ksi_att)
-pos_s1, pos_s2 = Laplace_transform_pos()
-M_pos,M_att = overshoot(ksi_pos, ksi_att)
+        wd_att_list.append(root_att.imag)
+        wd_acc_list.append(root_acc.imag)
+
+    sigma_att = np.array(sigma_att_list)#자세 실수부
+    sigma_acc = np.array(sigma_acc_list)#가속도 실수부
+    wd_att    = np.array(wd_att_list)   #자세 허수부
+    wd_acc    = np.array(wd_acc_list)   #가속도 허수부
+    Wn_att    = np.sqrt((sigma_att**2)+(wd_att**2))
+    Wn_acc    = np.sqrt((sigma_acc**2)+(wd_acc**2))
+    ksi_att   = -sigma_att / Wn_att
+    ksi_acc   = -sigma_acc / Wn_acc 
+    # Mp_att    = np.exp(-((np.pi*ksi_att)/(np.sqrt(1-ksi_att**2))))
+    # Mp_acc    = np.exp(-((np.pi*ksi_acc)/(np.sqrt(1-ksi_acc**2))))
+    # Mp_att    = Mp_att * 100
+    # Mp_acc    = Mp_acc * 100
+    # damp_att  = len(set(map(tuple,sigma_att_list)))
+    # damp_acc  = len(set(map(tuple,sigma_acc_list)))
+
+    # if np.all(wd_att == 0) and damp_att==1:
+    #     print("자세 임계감쇠")
+    # elif np.all(wd_att == 0) and damp_att>1:
+    #     print("자세 과감쇠")
+    # elif np.any(wd_att):
+    #     print(f"자세 오버슛: {Mp_att}")
+
+    # if np.all(wd_acc == 0) and damp_acc==1:
+    #     print("가속도 임계감쇠")
+    # elif np.all(wd_acc == 0) and damp_acc>1:
+    #     print("가속도 과감쇠")
+    # elif np.any(wd_acc):
+    #     print(f"가속도 오버슛: {Mp_acc}%")
+
+    
+
+    if np.all(sigma_att < 0):
+        print("Sigma_Att is lower than 0. Att Stable")
+    else:
+        print("Sigma_Att is higher than 0. Att Unstable")
+
+    if np.all(sigma_acc < 0):
+        print("Sigma_Acc is lower than 0. Acc Stable")
+    else:
+        print("Sigma_Acc is higher than 0. Acc Unstable")
+
+    if np.any(wd_att!=0):
+        print("자세진동발생")
+    else:
+        print("자세진동없음")
+
+    if np.any(wd_acc!=0):
+        print("가속도진동발생")
+    else:
+        print("가속도진동없음")
+
+
+    
+
+
+acc_linear_stable = acc_stability()
+att_linear_stable = att_stability()
+asdf = overshoot()

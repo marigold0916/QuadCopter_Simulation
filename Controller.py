@@ -2,8 +2,8 @@ import numpy as np
 
 class Controller:
     def __init__(self, m=1.5, g=9.81,
-        Kp_pos = (0.15, 1.4,1.5), Ki_pos = (0,0,0), Kd_pos = (0.5,1.5,1.75),
-        Kp_att = (1.5, 1.5,0.75), Ki_att = (0,0,0), Kd_att = (0.25,0.25,0.25)):
+        Kp_pos = (0.5, 1.4,1.5), Ki_pos = (0.05,1.0,1.0), Kd_pos = (0.5,1.5,1.75),
+        Kp_att = (1.5, 1.5,0.75), Ki_att = (1.0,1.0,1.0), Kd_att = (0.25,0.25,0.25)):
 
         self.m = m; self.g=g
         self.Kp_pos = np.array(Kp_pos); self.Ki_pos = np.array(Ki_pos); self.Kd_pos = np.array(Kd_pos)

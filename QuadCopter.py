@@ -3,23 +3,24 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from data_logger import start_logging
 from Controller import Controller
+from Disturbance import WindGust, AeroDrag, compute_disturbance
 
 class QuadCopter:
     def __init__(self, m=1.5, arm_length=0.5, Ixx=0.02, Iyy=0.02, Izz=0.04, g=9.81,
                  c_yaw=0.02, spin_dirs=(1,-1,1,-1)):
-        self.m = m
-        self.L = arm_length
-        self.I = np.array([Ixx, Iyy, Izz]) #관성 모멘트 
-        self.g = g
-        self.c_yaw = c_yaw
-        self.spin_dirs = np.array(spin_dirs, dtype=float)
+        self.m          = m
+        self.L          = arm_length
+        self.I          = np.array([Ixx, Iyy, Izz]) #관성 모멘트 
+        self.g          = g
+        self.c_yaw      = c_yaw
+        self.spin_dirs  = np.array(spin_dirs, dtype=float)
         self.arm_angles = np.deg2rad([45, 135, 225, 315])#로터 위치
-        self.xs = self.L * np.cos(self.arm_angles)
-        self.ys = self.L * np.sin(self.arm_angles)
-        A = np.vstack([np.ones(4), self.ys, -self.xs, self.c_yaw * self.spin_dirs])
-        self.A = A
-        self.A_inv = np.linalg.inv(A)#혼합 행렬,로터4개의 추력을 x,y,z의 토크로 변경
-        self.state = np.zeros(12)#상태 변수 12개(위치, 오일러 각도: 롤/피치/요, 선속도, 각속도)
+        self.xs         = self.L * np.cos(self.arm_angles)
+        self.ys         = self.L * np.sin(self.arm_angles)
+        A               = np.vstack([np.ones(4), self.ys, -self.xs, self.c_yaw * self.spin_dirs])
+        self.A          = A
+        self.A_inv      = np.linalg.inv(A)#혼합 행렬,로터4개의 추력을 x,y,z의 토크로 변경
+        self.state      = np.zeros(12)#상태 변수 12개(위치, 오일러 각도: 롤/피치/요, 선속도, 각속도)
 
     def reset(self, initial_state=None):
         self.state = np.zeros(12) if initial_state is None else np.array(initial_state, dtype=float)
@@ -40,25 +41,28 @@ class QuadCopter:
 
     @staticmethod
     def transform(points, R, t):
-        #점들의 집합에 회전($R$)과 평행이동($t$)을 적용하여 3D 공간상의 위치를 계산
+        #점들의 집합에 회전(R)과 평행이동(t)을 적용하여 3D 공간상의 위치를 계산
         return (R @ points.T).T + t
 
-    def mix(self, F_total, tau_x, tau_y, tau_z):#제어 명령 변환
+    def mix(self, F_total, tau_x, tau_y, tau_z,min_thrust = 0.0, max_thrust = 12.0):#제어 명령 변환
         #각 로터가 내야 하는 개별 추력 구함
         cmd = self.A_inv @ np.array([F_total, tau_x, tau_y, tau_z])
-        return np.maximum(cmd, 0.0)
+        return np.clip(cmd, min_thrust, max_thrust)     
 
-    def steps(self, thrusts, dt): # dt 동안 드론의 상태 변화를 계산합니다.
+    def steps(self, thrusts, dt, ext_force = None, ext_torque=None): # dt 동안 드론의 상태 변화를 계산합니다.
         #로터의 추력으로부터 전체 추력과 3축 토크를 계산
-        x, y, z, phi, theta, psi, vx, vy, vz, p, q, r = self.state
-        F_total = np.sum(thrusts)
-        tau_x = np.sum(self.ys * thrusts)
-        tau_y = np.sum(-self.xs * thrusts)
-        tau_z = self.c_yaw * np.sum(self.spin_dirs * thrusts)
+        if ext_force is None:
+            ext_force  = np.zeros(3)
+        if ext_torque is None:
+            ext_torque = np.zeros(3)
 
-        R = self.rotation_matrix(phi, theta, psi)
-        acc_world = (R @ np.array([0, 0, F_total])) / self.m - np.array([0, 0, self.g])#선가속도
-        #(오일러-뉴턴 방정식)
+        x, y, z, phi, theta, psi, vx, vy, vz, p, q, r = self.state
+        F_total    = np.sum(thrusts)
+        tau_x      = np.sum(self.ys * thrusts) + ext_torque[0]
+        tau_y      = np.sum(-self.xs * thrusts) + ext_torque[1]
+        tau_z      = self.c_yaw * np.sum(self.spin_dirs * thrusts)
+        R          = self.rotation_matrix(phi, theta, psi)
+        acc_world  = (R @ np.array([0, 0, F_total])) / self.m - np.array([0, 0, self.g]) + ext_force / self.m
         ax, ay, az = acc_world
 
         Ixx, Iyy, Izz = self.I
@@ -66,9 +70,9 @@ class QuadCopter:
         q_dot = ((Izz - Ixx) * p * r + tau_y) / Iyy
         r_dot = ((Ixx - Iyy) * p * q + tau_z) / Izz
 
-        phi_dot = p + np.sin(phi) * np.tan(theta) * q + np.cos(phi) * np.tan(theta) * r
+        phi_dot   = p + np.sin(phi) * np.tan(theta) * q + np.cos(phi) * np.tan(theta) * r
         theta_dot = np.cos(phi) * q - np.sin(phi) * r#오일러 각 변화율
-        psi_dot = (np.sin(phi) / np.cos(theta)) * q + (np.cos(phi) / np.cos(theta)) * r
+        psi_dot   = (np.sin(phi) / np.cos(theta)) * q + (np.cos(phi) / np.cos(theta)) * r
 #수치 적분 (Euler Integration)
         vx += ax*dt; vy += ay*dt; vz += az*dt
         x += vx*dt; y += vy*dt; z += vz*dt
@@ -94,12 +98,23 @@ class Visualizer:
             axis=1,
         )
 
-    def live(self, model, controller, target_pos, dt):
+    def live(self, model, controller, targets, dt, wind_model = None, drag_model = None):
         fig = plt.figure(figsize=(7,7))
         ax = fig.add_subplot(111, projection='3d')#1행 1열의 1번째 서브플롯 영역을 만들고 3d좌표계사용
         ax.set_xlim(-3,3); ax.set_ylim(-3,3); ax.set_zlim(0,12)
         ax.set_xlabel('X[m]'); ax.set_ylabel('Y[m]'); ax.set_zlabel('Z[m]')
         ax.set_title('Quadcopter Simulation')
+
+        target_color = ['red', 'green', 'blue', 'purple', 'mediumaquamarine']
+        target_points= [
+            ax.plot(
+                [targets[i,0]],[targets[i,1]], [targets[i,2]],
+                'o', color=target_color[i], markersize = 8, label=f'Target {i+1}'
+            )[0]
+            for i in range(5)
+        ]
+
+        current_target_idx = 0
 
         trail_line = ax.plot([],[],[], "b--", linewidth=1, label="Trajectory")[0]
         #데이터 변경을 위해 리스트의 첫번째 값 꺼내기 
@@ -115,14 +130,30 @@ class Visualizer:
         #프레임이 진행됨에 따라 드론이 지나온 X, Y, Z 좌표를 누적하여 저장할 빈 리스트들
 
         def update(_):
-            F, tx, ty, tz = controller.compute_control(model.state, target_pos)
+            nonlocal current_target_idx
+            #현재목표
+            current_target = targets[current_target_idx]
+
+            F, tx, ty, tz = controller.compute_control(model.state, current_target)
             #현재 기체 상태와 목표 위치로 부터 필요한 총 추력과 3축 토크 계산
             thrusts = model.mix(F, tx, ty, tz)
             #필요한 힘/토크를 4개 개별 로터의 추력으로 분배
-            state = model.steps(thrusts, dt)
+            if wind_model is not None and drag_model is not None:
+                F_dist, tau_dist = compute_disturbance(model.state, wind_model, drag_model, dt)
+            else:
+                F_dist, tau_dist = np.zeros(3), np.zeros(3)
+
+            state = model.steps(thrusts, dt, ext_force = F_dist, ext_torque= tau_dist)
             # 물리 뉴턴-오일러 방정식을 dt 동안 적분하여 12개 상태량을 update
             x, y, z, phi, theta, psi = state[0:6]
             #12개 상태량 중 앞의 6개 요소인 위치 (x, y, z) 및 오일러 각도 (phi, theta, psi)만 추출
+
+            position_error = np.abs(state[0:3] - current_target)
+            if np.all(position_error <= 0.5):#목표범위
+                if current_target_idx < len(targets) - 1:
+                    current_target_idx += 1
+
+
             t = np.array([x, y, z])
             R = model.rotation_matrix(phi, theta, psi)
             #평행이동 벡터 t와 Z-Y-X 오일러 회전 행렬 R을 만듬
@@ -154,9 +185,9 @@ class Visualizer:
                 #20개 점의 X, Y, Z 좌표 슬라이싱 배열을 전달하여 3D 원을 완성
                 rotor_line[i].set_3d_properties(disk_world[:,2])
 
-            return [trail_line, center_points] + arm_line + rotor_line
+            return [trail_line, center_points] + arm_line + rotor_line + target_points
 
-        anim = FuncAnimation(fig, update, frames=200, interval=dt*1000, cache_frame_data=False)
+        anim = FuncAnimation(fig, update, frames=2000, interval=dt*1000, cache_frame_data=False)
         plt.show()
 
 
@@ -168,12 +199,24 @@ if __name__ == "__main__":
     Ixx, Iyy, Izz = 0.02, 0.02, 0.04
     g = 9.81
     c_yaw = 0.02
-    dt = 0.02
-    target_pos = [2.7, -1.3, 11.1]
+    dt = 0.005
+    #target_pos = [2.7, -1.3, 11.1]
+    targets = np.random.uniform(
+        low  = [-2.5, -2.5, 2.0],
+        high = [2.5, 2.5, 11.0],
+        size = (5, 3)
+    )
+    print("Targets:")
+    for i, target in enumerate(targets):
+        print(f"Target {i+1}: {target}")
 
     model = QuadCopter(m=m, arm_length=arm_length, Ixx=Ixx, Iyy=Iyy, Izz=Izz, g=g, c_yaw=c_yaw)
     controller = Controller(m=m, g=g)
     visualizer = Visualizer(arm_length=arm_length, r_rotor=r_rotor)
 
-    start_logging(model, controller, target_pos, dt)
-    visualizer.live(model, controller, target_pos, dt)
+    wind_model = WindGust(steady_wind=(1.0, 0.5, 0.0), sigma=(0.5, 0.5, 0.2), tau=(2.0, 2.0, 1.0))
+    drag_model = AeroDrag()
+
+    start_logging(model, controller, targets, dt)
+    model.reset()
+    visualizer.live(model, controller, targets, dt, wind_model=wind_model, drag_model=drag_model)
