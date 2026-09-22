@@ -41,6 +41,7 @@ def generate_dataset(num_samples=100000, dt=0.005):
         q_dot_nom       = ((Izz - Ixx) * p * r + tau_y_nom) / Iyy
         r_dot_nom       = ((Ixx - Iyy) * p * q + tau_z_nom) / Izz
         alpha_nom       = np.array([p_dot_nom, q_dot_nom, r_dot_nom])
+
         
         # 외란 및 Actual 물리 계산
         F_dist, tau_dist = compute_disturbance(current_state, wind_model, drag_model, dt)
@@ -53,6 +54,9 @@ def generate_dataset(num_samples=100000, dt=0.005):
         
         X_data.append(X_samples)
         Y_data.append(Y_sample)
+        if not np.all(np.isfinite(current_state)):
+            print(f"Step {step}에서 발산: {current_state}")
+            break
 
     # ==================== 2. 루프 종료 후 저장 (for문 밖) ====================
     X_data = np.array(X_data, dtype=np.float32)

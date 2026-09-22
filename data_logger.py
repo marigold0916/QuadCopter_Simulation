@@ -3,11 +3,6 @@ import matplotlib.pyplot as plt
 import os
 
 class DataLogger:
-    """
-    Visualizer의 update 함수를 감싸서(Wrap)
-    프로그램이 종료될 때까지 실시간으로 데이터를 계속 수집하고
-    창이 닫히면 자동으로 그래프들을 저장합니다 (통합본 + 데이터별 개별 플롯본).
-    """
     def __init__(self, filename="quadcopter_simulation_results.png"):
         self.filename = filename
         # 파일 경로 분석을 통해 개별 저장용 접두어(prefix) 생성

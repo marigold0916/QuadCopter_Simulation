@@ -4,6 +4,7 @@ from matplotlib.animation import FuncAnimation
 from data_logger import start_logging
 from Controller import Controller
 from Disturbance import WindGust, AeroDrag, compute_disturbance
+from Residual_pred import ResidualPredictor
 
 class QuadCopter:
     def __init__(self, m=1.5, arm_length=0.5, Ixx=0.02, Iyy=0.02, Izz=0.04, g=9.81,
@@ -79,6 +80,8 @@ class QuadCopter:
         p += p_dot*dt; q += q_dot*dt; r += r_dot*dt
         phi += phi_dot*dt; theta += theta_dot*dt; psi += psi_dot*dt
 
+        theta = np.clip(theta, -np.deg2rad(85), np.deg2rad(85))
+        phi   = np.clip(phi,   -np.deg2rad(85), np.deg2rad(85))
         self.state = np.array([x, y, z, phi, theta, psi, vx, vy, vz, p, q, r])
         return self.state
 
@@ -145,6 +148,7 @@ class Visualizer:
 
             state = model.steps(thrusts, dt, ext_force = F_dist, ext_torque= tau_dist)
             # 물리 뉴턴-오일러 방정식을 dt 동안 적분하여 12개 상태량을 update
+            controller.update_applied_thrusts(thrusts)
             x, y, z, phi, theta, psi = state[0:6]
             #12개 상태량 중 앞의 6개 요소인 위치 (x, y, z) 및 오일러 각도 (phi, theta, psi)만 추출
 
@@ -202,8 +206,8 @@ if __name__ == "__main__":
     dt = 0.005
     #target_pos = [2.7, -1.3, 11.1]
     targets = np.random.uniform(
-        low  = [-2.5, -2.5, 2.0],
-        high = [2.5, 2.5, 11.0],
+        low  = [-3.0, -3.0, 1.0],
+        high = [3.0, 3.0, 11.0],
         size = (5, 3)
     )
     print("Targets:")
@@ -211,7 +215,9 @@ if __name__ == "__main__":
         print(f"Target {i+1}: {target}")
 
     model = QuadCopter(m=m, arm_length=arm_length, Ixx=Ixx, Iyy=Iyy, Izz=Izz, g=g, c_yaw=c_yaw)
-    controller = Controller(m=m, g=g)
+    #controller = Controller(m=m, g=g)
+    residual_predictor = ResidualPredictor()
+    controller = Controller(m=m, g=g,Ixx=Ixx, Iyy=Iyy, Izz=Izz, residual_predictor=residual_predictor)
     visualizer = Visualizer(arm_length=arm_length, r_rotor=r_rotor)
 
     wind_model = WindGust(steady_wind=(1.0, 0.5, 0.0), sigma=(0.5, 0.5, 0.2), tau=(2.0, 2.0, 1.0))
