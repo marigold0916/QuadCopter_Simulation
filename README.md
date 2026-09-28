@@ -72,15 +72,7 @@ State Update
 
 위치 제어기는 position error를 이용하여 desired acceleration을 계산합니다.
 
-$$
-a_{cmd}
-=
-K_p e
-+
-K_i\int e\,dt
-+
-K_d\dot e
-$$
+$$a_{cmd}=K_p e+K_i\int e\,dt+K_d\dot e$$
 
 이후 desired acceleration으로부터 desired attitude와 total thrust를 계산하고, attitude controller를 통해 최종 torque를 결정합니다.
 
