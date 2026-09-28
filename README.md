@@ -112,11 +112,7 @@ Integral term에는 saturation을 적용하여 integral windup을 제한합니�
 
 Wind Gust는 steady wind와 stochastic gust를 포함하며, Aerodynamic Drag는 상대 속도를 기반으로 계산합니다.
 
-$$
-F_{drag}
-=
--k_{lin}|v_{rel}|v_{rel}
-$$
+$$F_{drag} = -k_{lin}|v_{rel}|v_{rel}$$
 
 또한 rotational drag와 wind-induced torque를 고려합니다.
 
@@ -126,22 +122,15 @@ $$
 
 PID gain에 따른 폐루프 시스템의 안정성을 확인하기 위해 각 축을 3차 특성방정식으로 근사하여 분석합니다.
 
-$$
-a_3s^3+a_2s^2+a_1s+a_0=0
-$$
+$$a_3s^3+a_2s^2+a_1s+a_0=0$$
 
 3차 시스템에 대해 Routh-Hurwitz 조건을 적용합니다.
 
-$$
-b_1=
-\frac{a_2a_1-a_3a_0}{a_2}
-$$
+$$b_1=\frac{a_2a_1-a_3a_0}{a_2}$$
 
 다음 조건을 확인하여 선형 안정성을 판별합니다.
 
-$$
-a_3,a_2,a_1,a_0,b_1 > 0
-$$
+$$a_3,a_2,a_1,a_0,b_1 > 0$$
 
 또한 폐루프 pole을 계산하고 다음 특성을 분석합니다.
 
@@ -150,13 +139,9 @@ $$
 * Natural frequency \(\omega_n\)
 * Damping ratio \(\zeta\)
 
-$$
-\omega_n=\sqrt{\sigma^2+\omega_d^2}
-$$
+$$\omega_n=\sqrt{\sigma^2+\omega_d^2}$$
 
-$$
-\zeta=-\frac{\sigma}{\omega_n}
-$$
+$$\zeta=-\frac{\sigma}{\omega_n}$$
 
 이를 통해 안정성뿐만 아니라 진동 성분과 감쇠 특성을 함께 확인합니다.
 
@@ -168,43 +153,19 @@ $$
 
 외란이 존재할 때 nominal dynamics와 실제 dynamics 사이의 차이를 학습합니다.
 
-$$
-a_{res}
-=
-a_{actual}-a_{nominal}
-$$
+$$a_{res}=a_{actual}-a_{nominal}$$
 
-$$
-\alpha_{res}
-=
-\alpha_{actual}-\alpha_{nominal}
-$$
+$$\alpha_{res}=\alpha_{actual}-\alpha_{nominal}$$
 
 따라서 학습 대상은 다음 6차원 벡터입니다.
 
-$$
-y=
-[
-a_{res,x},
-a_{res,y},
-a_{res,z},
-\alpha_{res,x},
-\alpha_{res,y},
-\alpha_{res,z}
-]
-$$
+$$y=[a_{res,x},a_{res,y},a_{res,z},\alpha_{res,x},\alpha_{res,y},\alpha_{res,z}]$$
 
 ### Dataset
 
 입력은 현재 12-state와 4개의 rotor thrust로 구성됩니다.
 
-$$
-16D =
-[
-state_{12},
-T_1,T_2,T_3,T_4
-]
-$$
+$$16D =[state_{12},T_1,T_2,T_3,T_4]$$
 
 총 100,000개의 sample을 생성하고 80/20으로 training/validation set을 구성합니다.
 
@@ -254,19 +215,11 @@ Rotor Thrust
 
 예측된 linear acceleration residual은 desired acceleration에 보상합니다.
 
-$$
-a_{cmd,new}
-=
-a_{cmd}-\hat a_{res}
-$$
+$$a_{cmd,new}=a_{cmd}-\hat a_{res}$$
 
 Angular acceleration residual은 관성 모멘트를 이용하여 torque compensation에 반영합니다.
 
-$$
-\tau_{comp}
-=
-I\hat{\alpha}_{res}
-$$
+$$\tau_{comp}=I\hat{\alpha}_{res}$$
 
 현재 구현에서는 이전 timestep에서 실제로 적용된 rotor thrust를 model input에 포함하여 causal한 형태로 residual prediction을 수행합니다.
 
